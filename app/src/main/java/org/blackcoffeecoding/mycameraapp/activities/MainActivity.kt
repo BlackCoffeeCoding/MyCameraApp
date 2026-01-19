@@ -13,6 +13,7 @@ import android.util.Log
 import android.view.MotionEvent
 import android.view.ScaleGestureDetector
 import android.view.View
+import android.view.ViewGroup
 import android.widget.Toast
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
@@ -79,9 +80,36 @@ class MainActivity : AppCompatActivity() {
         binding.imageCaptureButton.setBackgroundResource(R.drawable.btn_shutter_photo)
 
         // обработка отступов для системных панелей (чтобы кнопки не перекрывались статус-баром)
+        // Настраиваем отступы для Edge-to-Edge
         ViewCompat.setOnApplyWindowInsetsListener(binding.main) { v, insets ->
-            val systemBars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
-            v.setPadding(systemBars.left, systemBars.top, systemBars.right, systemBars.bottom)
+            val bars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
+
+            // 1. Верхний отступ (padding) для всего экрана, чтобы не перекрывало статус-бар (часы, зарядку)
+            // Низ ставим 0, так как мы хотим, чтобы камера шла до самого низа
+            v.setPadding(bars.left, bars.top, bars.right, 0)
+
+            // 2. Нижний отступ (margin) ТОЛЬКО для кнопок
+            // Мы берем высоту системной панели (bars.bottom) и добавляем к нашим стандартным 20dp
+            val baseMargin = (20 * resources.displayMetrics.density).toInt() // переводим 20dp в пиксели
+            val newBottomMargin = baseMargin + bars.bottom
+
+            // Функция-помощник для обновления отступа
+            fun updateMargin(view: View) {
+                val params = view.layoutParams as ViewGroup.MarginLayoutParams
+                params.bottomMargin = newBottomMargin
+                view.layoutParams = params
+            }
+
+            // Применяем новый отступ ко всем нижним элементам
+            updateMargin(binding.imageCaptureButton)
+            updateMargin(binding.btnSwitchCamera)
+            updateMargin(binding.btnGallery)
+            updateMargin(binding.tvPhotoMode)
+            updateMargin(binding.tvVideoMode)
+
+            // Если добавил кольцо фокуса - его можно не двигать, оно временное, или тоже сдвинуть если хочешь
+            // updateMargin(binding.ivFocusRing)
+
             insets
         }
 
