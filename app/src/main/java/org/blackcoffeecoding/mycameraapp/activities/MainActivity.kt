@@ -35,6 +35,7 @@ import androidx.core.content.ContextCompat
 import androidx.core.content.PermissionChecker
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
+import org.blackcoffeecoding.mycameraapp.R
 import org.blackcoffeecoding.mycameraapp.databinding.ActivityMainBinding
 import java.text.SimpleDateFormat
 import java.util.Locale
@@ -68,6 +69,7 @@ class MainActivity : AppCompatActivity() {
 
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
+        binding.imageCaptureButton.setBackgroundResource(R.drawable.btn_shutter_photo)
 
         // обработка отступов для системных панелей (чтобы кнопки не перекрывались статус-баром)
         ViewCompat.setOnApplyWindowInsetsListener(binding.main) { v, insets ->
@@ -234,7 +236,7 @@ class MainActivity : AppCompatActivity() {
                 when(recordEvent) {
                     is VideoRecordEvent.Start -> {
                         // запись пошла: меняем кнопку на "Стоп"
-                        binding.imageCaptureButton.text = "STOP" // Или иконка
+                        binding.imageCaptureButton.setBackgroundResource(R.drawable.btn_shutter_video_recording)
                         binding.imageCaptureButton.isEnabled = true
                         binding.tvTimer.visibility = View.VISIBLE
                     }
@@ -255,7 +257,7 @@ class MainActivity : AppCompatActivity() {
                             Log.e("CameraX", "Video capture ends with error: ${recordEvent.error}")
                         }
                         // сбрасываем UI
-                        binding.imageCaptureButton.text = ""
+                        binding.imageCaptureButton.setBackgroundResource(R.drawable.btn_shutter_video_idle)
                         binding.tvTimer.visibility = View.GONE
                         binding.imageCaptureButton.isEnabled = true
                     }
@@ -327,16 +329,23 @@ class MainActivity : AppCompatActivity() {
         isVideoMode = isVideo
         startCamera() // Перезапуск камеры с новыми настройками
 
-        // Обновляем UI (текст и цвет кнопки)
+        // текст и цвет кнопки
         if (isVideo) {
             binding.tvVideoMode.setTextColor(Color.WHITE)
             binding.tvPhotoMode.setTextColor(Color.parseColor("#80FFFFFF"))
-            binding.imageCaptureButton.background.setTint(Color.RED) // Красная кнопка
+
+            // ставим красную кнопку (Idle)
+            binding.imageCaptureButton.setBackgroundResource(R.drawable.btn_shutter_video_idle)
+            binding.imageCaptureButton.text = ""
         } else {
+            // включаем стиль Фото
             binding.tvPhotoMode.setTextColor(Color.WHITE)
             binding.tvVideoMode.setTextColor(Color.parseColor("#80FFFFFF"))
-            binding.imageCaptureButton.background.setTint(Color.WHITE) // Белая кнопка
+
+            // ставим белое кольцо
+            binding.imageCaptureButton.setBackgroundResource(R.drawable.btn_shutter_photo)
             binding.tvTimer.visibility = View.GONE
+            binding.imageCaptureButton.text = ""
         }
     }
 
