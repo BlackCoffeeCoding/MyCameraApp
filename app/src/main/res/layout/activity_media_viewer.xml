@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.constraintlayout.widget.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    xmlns:app="http://schemas.android.com/apk/res-auto">
+    <ImageView android:id="@+id/imageView"
+        android:layout_width="match_parent" android:layout_height="match_parent"
+        android:scaleType="fitCenter" android:background="#000000"/>
+
+    <VideoView android:id="@+id/videoView"
+        android:layout_width="match_parent" android:layout_height="match_parent"
+        android:layout_centerInParent="true" />
+
+    <ImageButton android:id="@+id/btnDelete"
+        android:src="@android:drawable/ic_menu_delete"
+        android:background="#80000000"
+        android:layout_width="50dp" android:layout_height="50dp"
+        android:layout_margin="20dp"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toEndOf="parent" />
+
+    <ImageButton android:id="@+id/btnBack"
+        android:src="@android:drawable/ic_menu_revert"
+        android:background="#80000000"
+        android:layout_width="50dp" android:layout_height="50dp"
+        android:layout_margin="20dp"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintStart_toStartOf="parent" />
+
+</androidx.constraintlayout.widget.ConstraintLayout>
