@@ -43,6 +43,10 @@ import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
 
+// экспериментальные опции
+import androidx.annotation.OptIn
+import androidx.camera.video.ExperimentalPersistentRecording
+
 class MainActivity : AppCompatActivity() {
 
     // ViewBinding для доступа к элементам UI
@@ -58,6 +62,9 @@ class MainActivity : AppCompatActivity() {
     private var recording: Recording? = null // текущая сессия записи
     // переменная для выбора камеры (Front/Back)
     private var cameraSelector = CameraSelector.DEFAULT_BACK_CAMERA
+
+    // храним рекордер отдельно, чтобы не пересоздавать
+    private var recorder: Recorder? = null
 
     private var isVideoMode = false // флаг текущего режима
 
@@ -78,10 +85,11 @@ class MainActivity : AppCompatActivity() {
             insets
         }
 
-        // проверяем разрешения
-        if (allPermissionsGranted()) {
+        // проверяем разрешение именно на камеру. Аудио нам пока не важно.
+        if (ContextCompat.checkSelfPermission(baseContext, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED) {
             startCamera()
         } else {
+            // если камеры нет — запрашиваем (список запроса остается полным, чтобы спросить и аудио если его нет)
             requestPermissions()
         }
 
@@ -105,31 +113,39 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun startCamera() {
-        val cameraProviderFuture = ProcessCameraProvider.getInstance(this)
+        // если разрешения на камеру нет, мы просто не запускаем метод.
+        if (ContextCompat.checkSelfPermission(baseContext, Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
+            Toast.makeText(this, "Нет доступа к камере", Toast.LENGTH_SHORT).show()
+            return
+        }
 
+        val cameraProviderFuture = ProcessCameraProvider.getInstance(this)
         cameraProviderFuture.addListener({
             val cameraProvider: ProcessCameraProvider = cameraProviderFuture.get()
+
             val preview = Preview.Builder().build().also {
                 it.setSurfaceProvider(binding.viewFinder.surfaceProvider)
             }
 
-            // используем переменную класса, а не локальную константу
-            // val cameraSelector = CameraSelector.DEFAULT_BACK_CAMERA
-
             try {
+                // важно: unbindAll ставит Persistent-запись на ПАУЗУ, но не закрывает файл
                 cameraProvider.unbindAll()
 
                 if (isVideoMode) {
                     // настройка для ВИДЕО
-                    // создаем Recorder с качеством по умолчанию
-                    val recorder = Recorder.Builder()
-                        .setQualitySelector(QualitySelector.from(Quality.HIGHEST))
-                        .build()
-                    videoCapture = VideoCapture.withOutput(recorder)
+                    // если рекордер еще не создан — создаем
+                    if (recorder == null) {
+                        recorder = Recorder.Builder()
+                            .setQualitySelector(QualitySelector.from(Quality.HIGHEST))
+                            .build()
+                    }
+
+                    // Используем существующий recorder
+                    videoCapture = VideoCapture.withOutput(recorder!!)
 
                     // привязываем videoCapture
                     camera = cameraProvider.bindToLifecycle(
-                        this, cameraSelector, preview, videoCapture // cameraSelector
+                        this, cameraSelector, preview, videoCapture
                     )
                 } else {
                     // настройка для ФОТО
@@ -137,11 +153,16 @@ class MainActivity : AppCompatActivity() {
 
                     // привязываем imageCapture
                     camera = cameraProvider.bindToLifecycle(
-                        this, cameraSelector, preview, imageCapture // cameraSelector
+                        this, cameraSelector, preview, imageCapture
                     )
                 }
 
                 setupZoomAndTapToFocus()
+
+                // если у нас идет запись, мы её возобновляем после переключения
+                if (recording != null) {
+                    recording?.resume()
+                }
 
             } catch (exc: Exception) {
                 Log.e("CameraX", "Binding failed", exc)
@@ -182,7 +203,7 @@ class MainActivity : AppCompatActivity() {
                 }
 
                 override fun onImageSaved(output: ImageCapture.OutputFileResults) {
-                    val msg = "Фото сохранено: ${output.savedUri}"
+                    val msg = "Фото успешно сохранено в Галерею"
                     Toast.makeText(baseContext, msg, Toast.LENGTH_SHORT).show()
                     Log.d("CameraX", msg)
 
@@ -193,6 +214,7 @@ class MainActivity : AppCompatActivity() {
         )
     }
 
+    @OptIn(ExperimentalPersistentRecording::class)
     private fun captureVideo() {
         val videoCapture = this.videoCapture ?: return
 
@@ -221,48 +243,57 @@ class MainActivity : AppCompatActivity() {
             .setContentValues(contentValues)
             .build()
 
-        // начинаем запись
-        recording = videoCapture.output
+        // начинаем запись (с поддержкой бесшовного переключения)
+        val pendingRecording = videoCapture.output
             .prepareRecording(this, mediaStoreOutputOptions)
-            .apply {
-                // включаем запись звука, если есть разрешение
-                if (PermissionChecker.checkSelfPermission(this@MainActivity,
-                        Manifest.permission.RECORD_AUDIO) == PermissionChecker.PERMISSION_GRANTED) {
-                    withAudioEnabled()
+            .asPersistentRecording()
+
+        // включаем запись звука, если есть разрешение
+        if (PermissionChecker.checkSelfPermission(this@MainActivity,
+                Manifest.permission.RECORD_AUDIO) == PermissionChecker.PERMISSION_GRANTED) {
+            pendingRecording.withAudioEnabled()
+        }
+
+        // запускаем
+        recording = pendingRecording.start(ContextCompat.getMainExecutor(this)) { recordEvent ->
+            // лямбда для обработки событий записи (старт, пауза, прогресс, финиш)
+            when(recordEvent) {
+                is VideoRecordEvent.Start -> {
+                    // запись пошла: меняем кнопку на "Стоп" (Квадратик)
+                    binding.imageCaptureButton.setBackgroundResource(R.drawable.btn_shutter_video_recording)
+                    binding.imageCaptureButton.isEnabled = true
+                    binding.tvTimer.visibility = View.VISIBLE
+                    binding.btnGallery.visibility = View.INVISIBLE
+                    binding.tvPhotoMode.visibility = View.INVISIBLE
+                    binding.tvVideoMode.visibility = View.INVISIBLE
+                }
+                is VideoRecordEvent.Status -> {
+                    // обновляем таймер
+                    val stats = recordEvent.recordingStats
+                    val time = TimeUnit.NANOSECONDS.toSeconds(stats.recordedDurationNanos)
+                    binding.tvTimer.text = String.format("%02d:%02d", time / 60, time % 60)
+                }
+                is VideoRecordEvent.Finalize -> {
+                    // запись завершена
+                    if (!recordEvent.hasError()) {
+                        val msg = "Видео успешно сохранено в Галерею"
+                        Toast.makeText(baseContext, msg, Toast.LENGTH_SHORT).show()
+                    } else {
+                        recording?.close()
+                        recording = null
+                        Log.e("CameraX", "Video capture ends with error: ${recordEvent.error}")
+                    }
+
+                    // сбрасываем UI: возвращаем кнопку записи (Круг с точкой)
+                    binding.imageCaptureButton.setBackgroundResource(R.drawable.btn_shutter_video_idle)
+                    binding.tvTimer.visibility = View.GONE
+                    binding.imageCaptureButton.isEnabled = true
+                    binding.btnGallery.visibility = View.VISIBLE
+                    binding.tvPhotoMode.visibility = View.VISIBLE
+                    binding.tvVideoMode.visibility = View.VISIBLE
                 }
             }
-            .start(ContextCompat.getMainExecutor(this)) { recordEvent ->
-                // лямбда для обработки событий записи (старт, пауза, прогресс, финиш)
-                when(recordEvent) {
-                    is VideoRecordEvent.Start -> {
-                        // запись пошла: меняем кнопку на "Стоп"
-                        binding.imageCaptureButton.setBackgroundResource(R.drawable.btn_shutter_video_recording)
-                        binding.imageCaptureButton.isEnabled = true
-                        binding.tvTimer.visibility = View.VISIBLE
-                    }
-                    is VideoRecordEvent.Status -> {
-                        // обновляем таймер
-                        val stats = recordEvent.recordingStats
-                        val time = TimeUnit.NANOSECONDS.toSeconds(stats.recordedDurationNanos)
-                        binding.tvTimer.text = String.format("%02d:%02d", time / 60, time % 60)
-                    }
-                    is VideoRecordEvent.Finalize -> {
-                        // запись завершена
-                        if (!recordEvent.hasError()) {
-                            val msg = "Видео сохранено: ${recordEvent.outputResults.outputUri}"
-                            Toast.makeText(baseContext, msg, Toast.LENGTH_SHORT).show()
-                        } else {
-                            recording?.close()
-                            recording = null
-                            Log.e("CameraX", "Video capture ends with error: ${recordEvent.error}")
-                        }
-                        // сбрасываем UI
-                        binding.imageCaptureButton.setBackgroundResource(R.drawable.btn_shutter_video_idle)
-                        binding.tvTimer.visibility = View.GONE
-                        binding.imageCaptureButton.isEnabled = true
-                    }
-                }
-            }
+        }
     }
 
     // анимация моргания экрана для визуального подтверждения снимка
@@ -273,6 +304,32 @@ class MainActivity : AppCompatActivity() {
                 binding.root.foreground = null
             }, 50)
         }, 100)
+    }
+
+    // НОВАЯ ФУНКЦИЯ: Показывает и анимирует кольцо фокуса
+    private fun showFocusRing(x: Float, y: Float) {
+        val ring = binding.ivFocusRing // Убедись, что добавил ImageView с id ivFocusRing в XML!
+
+        // 1. Ставим кольцо в точку касания (центруем его)
+        ring.x = x - (ring.width / 2)
+        ring.y = y - (ring.height / 2)
+
+        // 2. Делаем видимым и сбрасываем прозрачность
+        ring.visibility = View.VISIBLE
+        ring.alpha = 1f
+        ring.scaleX = 1.2f
+        ring.scaleY = 1.2f
+
+        // 3. Запускаем анимацию: уменьшение + исчезновение
+        ring.animate()
+            .scaleX(1.0f)
+            .scaleY(1.0f)
+            .alpha(0f)
+            .setDuration(1000) // Длится 1 секунду
+            .withEndAction {
+                ring.visibility = View.GONE
+            }
+            .start()
     }
 
     private fun setupZoomAndTapToFocus() {
@@ -290,6 +347,10 @@ class MainActivity : AppCompatActivity() {
                     .build()
 
                 camera?.cameraControl?.startFocusAndMetering(action)
+
+                // ЗАПУСКАЕМ АНИМАЦИЮ КОЛЬЦА ФОКУСА
+                showFocusRing(event.x, event.y)
+
                 view.performClick() // для доступности
             }
             // возвращаем true, но даем работать детектору жестов
@@ -352,15 +413,14 @@ class MainActivity : AppCompatActivity() {
     // в следующем блоке работа с разрешениями
     private val activityResultLauncher =
         registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { permissions ->
-            var permissionGranted = true
-            permissions.entries.forEach {
-                if (it.key in REQUIRED_PERMISSIONS && !it.value)
-                    permissionGranted = false
-            }
-            if (!permissionGranted) {
-                Toast.makeText(baseContext, "Разрешение отклонено", Toast.LENGTH_SHORT).show()
-            } else {
+            // нам важно только разрешение на КАМЕРУ для старта превью
+            val cameraGranted = permissions[Manifest.permission.CAMERA] ?: false
+
+            if (cameraGranted) {
+                // если камеру разрешили — запускаем, даже если аудио запрещено
                 startCamera()
+            } else {
+                Toast.makeText(baseContext, "Без доступа к камере приложение не может работать", Toast.LENGTH_SHORT).show()
             }
         }
 
@@ -378,11 +438,11 @@ class MainActivity : AppCompatActivity() {
                 Manifest.permission.CAMERA,
                 Manifest.permission.RECORD_AUDIO
             ).apply {
-                // Для Android 9 и ниже нужно разрешение на запись
+                // для Android 9 и ниже нужно разрешение на запись
                 if (Build.VERSION.SDK_INT <= Build.VERSION_CODES.P) {
                     add(Manifest.permission.WRITE_EXTERNAL_STORAGE)
                 }
-                // Для Android 10+ WRITE_EXTERNAL_STORAGE не нужен для сохранения в галерею
+                // для Android 10+ WRITE_EXTERNAL_STORAGE не нужен для сохранения в галерею
             }.toTypedArray()
     }
 

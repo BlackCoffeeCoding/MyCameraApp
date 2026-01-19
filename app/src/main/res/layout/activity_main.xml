@@ -30,6 +30,16 @@
         app:layout_constraintTop_toTopOf="parent"
         tools:visibility="visible" />
 
+    <ImageView
+        android:id="@+id/ivFocusRing"
+        android:layout_width="60dp"
+        android:layout_height="60dp"
+        android:src="@drawable/focus_ring"
+        android:visibility="gone"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent"
+        tools:ignore="MissingConstraints" />
+
     <LinearLayout
         android:id="@+id/modeSelector"
         android:layout_width="wrap_content"
@@ -88,7 +98,7 @@
         android:layout_marginBottom="55dp"
         android:layout_marginEnd="40dp"
         android:background="?attr/selectableItemBackgroundBorderless"
-        android:src="@android:drawable/ic_menu_camera"
+        android:src="@android:drawable/ic_popup_sync"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintEnd_toEndOf="parent" />
 
