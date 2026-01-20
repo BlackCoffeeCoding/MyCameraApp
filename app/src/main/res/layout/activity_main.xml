@@ -73,11 +73,11 @@
         android:id="@+id/btnGallery"
         android:layout_width="50dp"
         android:layout_height="50dp"
-        android:layout_marginBottom="55dp"
         android:layout_marginStart="40dp"
         android:background="?attr/selectableItemBackgroundBorderless"
         android:src="@android:drawable/ic_menu_gallery"
-        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintBottom_toBottomOf="@+id/imageCaptureButton"
+        app:layout_constraintTop_toTopOf="@+id/imageCaptureButton"
         app:layout_constraintStart_toStartOf="parent" />
 
     <Button
@@ -95,11 +95,11 @@
         android:id="@+id/btnSwitchCamera"
         android:layout_width="50dp"
         android:layout_height="50dp"
-        android:layout_marginBottom="55dp"
         android:layout_marginEnd="40dp"
         android:background="?attr/selectableItemBackgroundBorderless"
         android:src="@android:drawable/ic_popup_sync"
-        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintBottom_toBottomOf="@+id/imageCaptureButton"
+        app:layout_constraintTop_toTopOf="@+id/imageCaptureButton"
         app:layout_constraintEnd_toEndOf="parent" />
 
 </androidx.constraintlayout.widget.ConstraintLayout>
