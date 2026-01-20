@@ -71,7 +71,6 @@ class MainActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-
         // включаем режим Edge-to-Edge
         enableEdgeToEdge()
 
@@ -93,11 +92,9 @@ class MainActivity : AppCompatActivity() {
                 params.bottomMargin = newBottomMargin
                 view.layoutParams = params
             }
-
             // двигаем только главную кнопку-якорь
             updateMargin(binding.imageCaptureButton)
             // боковые кнопки (btnSwitchCamera, btnGallery) привязаны к главной в XML, поэтому их двигать вручную не надо
-
             insets
         }
 
@@ -322,21 +319,21 @@ class MainActivity : AppCompatActivity() {
         }, 100)
     }
 
-    // НОВАЯ ФУНКЦИЯ: Показывает и анимирует кольцо фокуса
+    // показывает и анимирует кольцо фокуса
     private fun showFocusRing(x: Float, y: Float) {
         val ring = binding.ivFocusRing // Убедись, что добавил ImageView с id ivFocusRing в XML!
 
-        // 1. Ставим кольцо в точку касания (центруем его)
+        // ставим кольцо в точку касания (центруем его)
         ring.x = x - (ring.width / 2)
         ring.y = y - (ring.height / 2)
 
-        // 2. Делаем видимым и сбрасываем прозрачность
+        // делаем видимым и сбрасываем прозрачность
         ring.visibility = View.VISIBLE
         ring.alpha = 1f
         ring.scaleX = 1.2f
         ring.scaleY = 1.2f
 
-        // 3. Запускаем анимацию: уменьшение + исчезновение
+        // запускаем анимацию: уменьшение + исчезновение
         ring.animate()
             .scaleX(1.0f)
             .scaleY(1.0f)
@@ -361,12 +358,9 @@ class MainActivity : AppCompatActivity() {
                 val action = FocusMeteringAction.Builder(point, FocusMeteringAction.FLAG_AF)
                     .setAutoCancelDuration(3, TimeUnit.SECONDS) // сброс фокуса через n сек
                     .build()
-
                 camera?.cameraControl?.startFocusAndMetering(action)
-
-                // ЗАПУСКАЕМ АНИМАЦИЮ КОЛЬЦА ФОКУСА
+                // запуск анимации кольца фокуса
                 showFocusRing(event.x, event.y)
-
                 view.performClick() // для доступности
             }
             // возвращаем true, но даем работать детектору жестов
